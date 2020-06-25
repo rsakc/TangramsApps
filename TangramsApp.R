@@ -19,13 +19,101 @@ data$DisplayTime <- as.factor(data$DisplayTime)
 data$HintOn <- as.factor(data$HintOn)
 data$NumHints <- as.factor(data$NumHints)
 
-#Arranging Data
-data <- data %>% arrange(GroupID, PlayerID)
 
 #Paired Puzzle Data
 dataP <- data
 
+  #Arranging Data
+  dataP <- dataP %>% arrange(GroupID, PlayerID, Puzzle, Game)
 
+  #Creating Identifier Column
+  dataP$Identifier <- NA
+  
+  counter <- 1
+  dataP$Identifier[1] <- 1
+  
+  for(i in 2:nrow(dataP)){
+    
+    if(dataP$GroupID[i] == dataP$GroupID[i-1] &
+       dataP$PlayerID[i] == dataP$PlayerID[i-1]){
+      
+      dataP$Identifier[i] <- counter
+      
+    } else{
+      counter <- counter + 1
+      
+      dataP$Identifier[i] <- counter
+    }
+  }
+  
+ #Remove players with only one row of data
+ #Removing players with only one type of puzzle
+  Index <- numeric()
+  
+  for(i in unique(dataP$Identifier)){
+    
+    temp <- dataP %>% filter(Identifier == i)
+    
+    if(nrow(temp) < 2){
+      Index <- append(Index, i)
+    }
+    
+    if(length(unique(temp$Puzzle)) == 1){
+      Index <- append(Index, i)
+    }
+    
+  }
+  
+  #Removing marked players
+  #At this point, all players left have at least 2 rows, and at least 2 different puzzles
+  dataP <- dataP %>% filter(!(Identifier %in% Index))
+  
+
+  
+  #Keeping exactly two puzzles per player
+  dataP$Index <- 0
+ 
+   for(i in 2:nrow(dataP)){
+      
+     #Set up for the very first person only
+      if(i == 2){
+        counter <- 1
+        puzzle <- dataP$Puzzle[1]
+      }
+  
+      #If the players are the same and counter is 2
+      if(counter == 2 & dataP$Identifier[i - 1] == dataP$Identifier[i]){
+        dataP$Index[i] <- 1
+      }
+      
+      #If the players are the same and puzzle matches the very first puzzle for that player
+      if(dataP$Identifier[i - 1] == dataP$Identifier[i] &
+         puzzle == dataP$Puzzle[i]){
+        
+        dataP$Index[i] <- 1
+      }
+      
+     #If the players are the same but the puzzle does not match the very first puzzle for that player
+      if(dataP$Identifier[i - 1] == dataP$Identifier[i] & 
+         puzzle != dataP$Puzzle[i]){
+        
+        counter <- 2
+      }
+    
+     #If the players are not the same
+      if(dataP$Identifier[i - 1] != dataP$Identifier[i]){
+        counter <-  1
+        puzzle <- dataP$Puzzle[i]
+      }
+   }
+  
+
+  #Keeping only the rows that were not marked
+    dataP <- dataP %>% filter(Index == 0)
+
+ 
+  
+  
 #For UI Inputs
 all_groups <- sort(unique(data$GroupID))
 all_players <- sort(unique(data$PlayerID))
@@ -33,7 +121,6 @@ all_players <- sort(unique(data$PlayerID))
 
 
 ##UI
-
 ui <- fluidPage(
   
   titlePanel("Tangrams Hypothesis Tests"),
@@ -52,7 +139,7 @@ ui <- fluidPage(
               
       selectInput(inputId = "xvar",
                   label = "X Variable:",
-                  choices = c("Puzzle", "Var1", "Var2", "Var3"),
+                  choices = c("Puzzle", "Var1", "Var2", "Var3", "PlayerID"),
                   selected = "Puzzle",
                   multiple = FALSE),
 
@@ -82,7 +169,12 @@ ui <- fluidPage(
                 label = "Statistical Tests:",
                 choices = c("None", "Two Sample T-Test", "Paried T-Test", "ANOVA", "Block Design"),
                 selected = "None",
-                multiple = FALSE)),
+                multiple = FALSE),
+    
+    checkboxGroupInput(inputId = "filter",
+                       label = "Filter Data:",
+                       choices = c("Paired Data", "Win Data"))),
+                       
     
   
       #All data/clean data/good data (racer code)
