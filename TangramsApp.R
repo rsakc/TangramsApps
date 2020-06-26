@@ -266,7 +266,7 @@ ui <- fluidPage(
                   choices = c("Time", "NumClicks"),
                   selected = "Time",
                   multiple = FALSE),
-    
+     
       selectInput(inputId = "color",
                 label = "Color by:",
                 choices = c("Puzzle", "Var1", "Var2", "Var3", "RegTime", "DisplayTime", "HintOn", "NumHints", "HintTime"),
