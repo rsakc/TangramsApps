@@ -5,6 +5,8 @@ library(stringr)
 library(readr)
 library(ggplot2)
 library(dplyr)
+library(gdata)
+library(broom)
 
 #Tangrams Data
 data <-read_csv("https://www.stat2games.sites.grinnell.edu/data/tangrams/getdata.php")
@@ -13,39 +15,50 @@ data <-read_csv("https://www.stat2games.sites.grinnell.edu/data/tangrams/getdata
 data <- data %>% mutate(Date = str_sub(Date, 1, 10))
 
 #Converting to Columns to Factor/Character
+data$Puzzle <- as.factor(data$Puzzle)
 data$Win <- as.factor(data$Win)
 data$RegTime <- as.factor(data$RegTime)
 data$DisplayTime <- as.factor(data$DisplayTime)
 data$HintOn <- as.factor(data$HintOn)
 data$NumHints <- as.factor(data$NumHints)
+data$Var1 <- as.factor(data$Var1)
+data$Var2 <- as.factor(data$Var2)
+data$Var3 <- as.factor(data$Var3)
+data$PlayerID <- as.factor(data$PlayerID)
 
+#None to NA
+data["None"] <- NA
 
-#Paired Puzzle Data
-dataP <- data
+#Creating Identifier Column
 
   #Arranging Data
-  dataP <- dataP %>% arrange(GroupID, PlayerID, Puzzle, Game)
+  data <- data %>% arrange(GroupID, PlayerID, Puzzle, Game)
 
   #Creating Identifier Column
-  dataP$Identifier <- NA
-  
+  data$Identifier <- NA
+
   counter <- 1
-  dataP$Identifier[1] <- 1
+  data$Identifier[1] <- 1
+
+  for(i in 2:nrow(data)){
   
-  for(i in 2:nrow(dataP)){
+    if(data$GroupID[i] == data$GroupID[i-1] &
+       data$PlayerID[i] == data$PlayerID[i-1]){
     
-    if(dataP$GroupID[i] == dataP$GroupID[i-1] &
-       dataP$PlayerID[i] == dataP$PlayerID[i-1]){
-      
-      dataP$Identifier[i] <- counter
-      
-    } else{
+      data$Identifier[i] <- counter
+    
+   } else{
       counter <- counter + 1
-      
-      dataP$Identifier[i] <- counter
+    
+      data$Identifier[i] <- counter
     }
   }
-  
+
+
+
+##Paired Puzzle Data
+dataP <- data
+
  #Remove players with only one row of data
  #Removing players with only one type of puzzle
   Index <- numeric()
@@ -112,16 +125,121 @@ dataP <- data
     dataP <- dataP %>% filter(Index == 0)
 
  
+
+##Paired Var Data
+    datavar <- data
+    
+    #Remove players with only one row of data
+    #Keeping only players who played the same puzzle more than once
+    Index1 <- numeric()
+    for(i in unique(datavar$Identifier)){
+      
+      temp <- datavar %>% filter(Identifier == i)
+      
+      #Only one row of data
+      if(nrow(temp) < 2){
+        Index1 <- append(Index1, i)
+      }
+      
+      #Did not play a puzzle more than once
+      if(sum(duplicated(temp$Puzzle)) == 0){
+        Index1 <- append(Index1, i)
+        
+      }
+    }
+    #Removing marked players
+    datavar <- datavar %>% filter(!(Identifier %in% Index1))
+    
+    
+    #Keeping only puzzles that are duplicated
+     datavar$Index <- 1
+    
+    for(i in 2:nrow(datavar)){
+      
+      if(datavar$Identifier[i] == datavar$Identifier[i-1] &
+         datavar$Puzzle[i] == datavar$Puzzle[i-1]){
+        
+        datavar$Index[i-1] <- 0 
+        datavar$Index[i] <- 0
+        
+      }
+    }
+    
+    #Removing rows with Index = 1
+     datavar <- datavar %>% filter(Index == 0)
+    
+     
+     #Keeping exactly one pair of data per player
+     
+     #True/False column
+     tf <- duplicated(datavar$Identifier)
+     datavar <- cbind(datavar, tf)
+     datavar$tf <- as.factor(datavar$tf)
+     
+     datavar$Index2 <- 1
+     
+     for(i in 1:nrow(datavar)){
+       
+       if(datavar$tf[i] == "FALSE"){
+         
+         datavar$Index2[i] <-  0
+         datavar$Index2[i + 1] <- 0
+       }
+       
+       if(i == nrow(datavar)){
+         break
+       }
+     }
+     #Removing rows with Index2 == 1
+     datavar <- datavar %>% filter(Index2 == 0)
+   
+     
+     
+    #Keeping if there are exactly 2 levels
+    #Separate checks for each of the three variables
+     Indexv1 <- numeric()
+     Indexv2 <- numeric()
+     Indexv3 <- numeric()
+     
+     for(i in unique(datavar$Identifier)){
+       
+       temp <- datavar %>% filter(Identifier == i)
+       
+       #Var 1 Check
+       if(nlevels(drop.levels(temp$Var1)) != 2){
+         Indexv1 <- append(Indexv1, i)
+       }
+     
+       #Var2 Check
+       if(nlevels(drop.levels(temp$Var2)) != 2){
+         Indexv2 <- append(Indexv2, i)
+       }
+
+       #Var3 Check
+       if(nlevels(drop.levels(temp$Var3)) != 2){
+         Indexv3 <- append(Indexv3, i)
+       }
+     }
+       
+    #Creating filtered Data set for each variable
+     datav1 <- datavar %>% filter(!(Identifier %in% Indexv1))
+     datav2 <- datavar %>% filter(!(Identifier %in% Indexv2))
+     datav3 <- datavar %>% filter(!(Identifier %in% Indexv3))
+     
   
-  
+## Win Data
+    datawin <- data %>% filter(Win == "1")
+     
+    
 #For UI Inputs
 all_groups <- sort(unique(data$GroupID))
-all_players <- sort(unique(data$PlayerID))
-
+#all_players <- sort(unique(data$PlayerID))
 
 
 ##UI
 ui <- fluidPage(
+  
+  theme = shinytheme("readable"),
   
   titlePanel("Tangrams Hypothesis Tests"),
   
@@ -165,28 +283,25 @@ ui <- fluidPage(
                   label = "Add Boxplot",
                   value = FALSE),
     
+    
+    selectInput(inputId = "datatype",
+                label = "Data Type:",
+                choices = c("All Data", "Paired Data", "Win Data"),
+                selected = "All Data",
+                multiple = FALSE),
+    
     selectInput(inputId = "tests",
                 label = "Statistical Tests:",
-                choices = c("None", "Two Sample T-Test", "Paried T-Test", "ANOVA", "Block Design"),
+                choices = c("None", "Two Sample T-Test", "Paired T-Test", "ANOVA", "Block Design"),
                 selected = "None",
                 multiple = FALSE),
     
-    checkboxGroupInput(inputId = "filter",
-                       label = "Filter Data:",
-                       choices = c("Paired Data", "Win Data"))),
-                       
-    
-  
-      #All data/clean data/good data (racer code)
-  
-      #Two sample t-test (exactly 2 levels)
-      #Paired t-test (Exactly 2 levels)
-      #ANOVA
-      #Block Design
-      
+    downloadButton('downloadData', label = "Tangrams Data")),
     
       mainPanel(
-        plotOutput("plot")
+        plotOutput("plot"),
+        verbatimTextOutput("tests_out")
+      
       )
     
     )
@@ -200,7 +315,36 @@ server <- function(input, output,session){
   ##Reactive Data
   plotDataR <- reactive({
     
-    dataR <- data %>% filter(GroupID %in% input$groupID, !(PlayerID %in% input$playerID))
+    #All Data
+    if(input$datatype == "All Data"){
+      dataR <- data
+      
+    #Win Data
+    } else if(input$datatype == "Win Data"){
+        dataR <- datawin
+      
+        
+    #Paired Data
+    } else if(input$datatype == "Paired Data"){
+     
+      if(input$xvar == "Puzzle"){
+        dataR <- dataP
+    
+     } else if(input$xvar == "Var1"){
+        dataR <- datav1
+      
+     } else if(input$xvar == "Var2"){
+        dataR <- datav2
+      
+     } else if(input$xvar == "Var3"){
+        dataR <- datav3
+     
+     } else if(input$xvar == "PlayerID"){
+       dataR <- data
+     }
+   }
+    
+    dataR <- dataR %>% filter(GroupID %in% input$groupID, !(PlayerID %in% input$playerID))
     
     return(dataR)
   })
@@ -230,6 +374,9 @@ server <- function(input, output,session){
     
     #Reactive Data
     plotData <- plotDataR()
+    
+    #We must have data points
+    if(nrow(plotData) > 0){
     
     
     #General Plot
@@ -273,10 +420,267 @@ server <- function(input, output,session){
     }
     
     return(myplot)
+    
+    }
   })
   
   
+  ##Statistical Tests
+  output$tests_out <- renderPrint({
+    
+    #Reactive Data
+    plotData <- plotDataR()
+    
+    #We must have data points
+    if(nrow(plotData) > 0){
+    
+    
+    #Pulling 
+    XVariable <- plotData %>% pull(input$xvar)
+    XVariable <- drop.levels(XVariable)
+    XLevels <- nlevels(XVariable)
+    YVariable <- plotData %>% pull(input$yvar)
+    ColorVariable <- plotData %>% pull(input$color)
+    ColorVariable <- drop.levels(ColorVariable)
+    ColorLevels <- nlevels(ColorVariable)
+    
+    ##Two sample T test
+    if(input$tests == "Two Sample T-Test"){
+      
+      #Facet must be set to none
+      if(input$facets == "None"){
+        
+        #X Variable and color variable must be the same
+        if(input$xvar == input$color){
+          
+          #X Variable must have exactly two levels
+          if(XLevels == 2){
+            t.test(YVariable ~ XVariable)
+            
+          } else{
+            "T-Tests are only valid when there are exactly 2 groups."
+          }
+          
+        } else{
+          "The X Variable and the Color Variable must be the same."
+        }
+        
+      } else{
+        "Facet option must be set to None to run the Two Sample T-Test."
+      }
+    
+    ##Paired T Test
+    } else if(input$tests == "Paired T-Test"){
+      
+      #Data Type must be paired
+      if(input$datatype == "Paired Data"){
+        
+        #Facet must be set to none
+        if(input$facets == "None"){
+          
+          #X Variable and color variable must be the same
+          if(input$xvar == input$color){
+            
+            #X Variable must have exactly two levels
+            if(XLevels == 2){
+              t.test(YVariable ~ XVariable, paired = TRUE)
+              
+              
+            } else{
+              "T-Tests are only valid when there are exactly 2 groups."
+              }
+            
+          } else{
+            "The X Variable and the Color Variable must be the same."
+           }
+      
+        } else{
+          "Facet option must be set to None to run the Two Sample T-Test."
+        }
+        
+      } else{
+        "Paired Data must be selected to run the Paired T-Test."
+      }
   
+      
+    ##ANOVA
+    } else if(input$tests == "ANOVA"){
+      
+      #Pulling Facet Variable
+      FacetVariable <- plotData %>% pull(input$facets)
+      FacetVariable <- drop.levels(FacetVariable)
+      FacetLevels <- nlevels(FacetVariable)
+      
+      if(input$datatype != "Paired Data"){
+      
+
+      if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+        
+        anovatest <- aov(YVariable ~ XVariable + ColorVariable + FacetVariable + 
+                           XVariable*ColorVariable + 
+                           XVariable*FacetVariable +
+                           ColorVariable*FacetVariable)
+        
+      } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+        
+        
+        anovatest <-  aov(YVariable ~ XVariable + ColorVariable +
+                            XVariable*ColorVariable)
+        
+        
+        
+      } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+        
+        
+        anovatest <-  aov(YVariable ~ XVariable + FacetVariable +
+                            XVariable*FacetVariable)
+        
+        
+        
+      } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+        
+        anovatest <-  aov(YVariable ~ XVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+        
+        
+        anovatest <-  aov(YVariable ~ ColorVariable + FacetVariable +
+                            ColorVariable*FacetVariable)
+        
+        
+      } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+        
+        anovatest <-  aov(YVariable ~ ColorVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+        
+        anovatest <-  aov(YVariable ~ FacetVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+        
+        message <- "At least two levels are needed to run the ANOVA"
+        
+      }
+      
+      #Returning Error message
+      if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+        
+        return(message)
+        
+      } else{
+        
+        #Making Tidy table and adding columns/rows
+        tidyanova = tidy(anovatest)
+        sum_df = sum(tidyanova$df)
+        sum_ss = sum(tidyanova$'sumsq')
+        tidyanova = add_row(tidyanova,term = "Total", df = sum_df, sumsq = sum_ss)
+        tidyanova$sumsq = round(tidyanova$sumsq, digits = 2)
+        tidyanova$meansq = round(tidyanova$meansq, digits = 2)
+        tidyanova$statistic = round(tidyanova$statistic, digits = 2)
+        
+        return(tidyanova)
+      }
+        
+      #Error message since paired Data is selected  
+      } else{
+        "Either All Data or Win Data must be selected to run the ANOVA."
+    }
+    
+      
+    } else if(input$tests == "Block Design"){
+      
+      #Pulling Facet Variable and PlayerID Variable
+      FacetVariable <- plotData %>% pull(input$facets)
+      FacetVariable <- drop.levels(FacetVariable)
+      FacetLevels <- nlevels(FacetVariable)
+      PlayerID <- plotData$PlayerID
+      
+      if(input$datatype != "Paired Data"){
+      
+      if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+        
+        anovatest <- aov(YVariable ~ PlayerID + XVariable + ColorVariable + FacetVariable + 
+                           XVariable*ColorVariable + 
+                           XVariable*FacetVariable +
+                           ColorVariable*FacetVariable)
+        
+      } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+        
+        
+        anovatest <-  aov(YVariable ~ PlayerID + XVariable + ColorVariable +
+                            XVariable*ColorVariable)
+        
+        
+        
+      } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+        
+        
+        anovatest <-  aov(YVariable ~ PlayerID + XVariable + FacetVariable +
+                            XVariable*FacetVariable)
+        
+        
+        
+      } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+        
+        anovatest <-  aov(YVariable ~ PlayerID + XVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+        
+        
+        anovatest <-  aov(YVariable ~ PlayerID + ColorVariable + FacetVariable +
+                            ColorVariable*FacetVariable)
+        
+        
+      } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+        
+        anovatest <-  aov(YVariable ~ PlayerID + ColorVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+        
+        anovatest <-  aov(YVariable ~ PlayerID + FacetVariable)
+        
+      } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+        
+        message <- "At least two levels are needed to run the ANOVA"
+        
+      }
+      
+      #Returning Error message
+      if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+        
+        return(message)
+        
+      } else{
+        
+        #Making Tidy table and adding columns/rows
+        tidyanova = tidy(anovatest)
+        sum_df = sum(tidyanova$df)
+        sum_ss = sum(tidyanova$'sumsq')
+        tidyanova = add_row(tidyanova,term = "Total", df = sum_df, sumsq = sum_ss)
+        tidyanova$sumsq = round(tidyanova$sumsq, digits = 2)
+        tidyanova$meansq = round(tidyanova$meansq, digits = 2)
+        tidyanova$statistic = round(tidyanova$statistic, digits = 2)
+        
+        return(tidyanova)
+      }
+      
+      #Error message since paired Data is selected  
+      } else{
+        "Either All Data or Win Data must be selected to run the ANOVA."
+      }
+    }
+    
+  }
+})
+  
+  #Download Data
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste('Data-', Sys.Date(), '.csv', sep="")
+    },
+    content = function(con) {
+      write.csv(plotDataR(), con)
+    })
   
   
 #Closes Server
