@@ -7,9 +7,9 @@ library(ggplot2)
 library(dplyr)
 library(gdata)
 library(broom)
-
+ 
 #Tangrams Data
-data <-read_csv("https://www.stat2games.sites.grinnell.edu/data/tangrams/getdata.php")
+data <- read_csv("https://www.stat2games.sites.grinnell.edu/data/tangrams/getdata.php")
 
 #Date Column
 data <- data %>% mutate(Date = str_sub(Date, 1, 10))
