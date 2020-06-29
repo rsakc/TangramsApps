@@ -477,7 +477,17 @@ server <- function(input, output,session){
           
           #X Variable must have exactly two levels
           if(XLevels == 2){
-            t.test(YVariable ~ XVariable)
+            
+            #Each group needs more than 1 observation
+            check <- plotData %>% group_by_at(input$xvar) %>%
+              summarize(Count = n())
+            
+            if(!(1 %in% check$Count)){
+              t.test(YVariable ~ XVariable)
+              
+            } else {
+              "Not enough observations to run the Two Sample T-Test."
+            }
             
           } else{
             "T-Tests are only valid when there are exactly 2 groups."
@@ -505,8 +515,17 @@ server <- function(input, output,session){
             
             #X Variable must have exactly two levels
             if(XLevels == 2){
-              t.test(YVariable ~ XVariable, paired = TRUE)
               
+              #Each group needs more than 1 observation
+              check <- plotData %>% group_by_at(input$xvar) %>%
+                summarize(Count = n())
+              
+              if(!(1 %in% check$Count)){
+                t.test(YVariable ~ XVariable, paired = TRUE)
+                
+              } else {
+                "Not enough observations to run the Paired T-Test."
+              } 
               
             } else{
               "T-Tests are only valid when there are exactly 2 groups."
