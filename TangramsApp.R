@@ -495,7 +495,7 @@ server <- function(input, output,session){
            }
       
         } else{
-          "Facet option must be set to None to run the Two Sample T-Test."
+          "Facet option must be set to None to run the Paired T-Test."
         }
         
       } else{
