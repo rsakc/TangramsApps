@@ -14,6 +14,9 @@ data <- read_csv("https://www.stat2games.sites.grinnell.edu/data/tangrams/getdat
 #Date Column
 data <- data %>% mutate(Date = str_sub(Date, 1, 10))
 
+#Changing NA to None for Vars
+data[is.na(data)] <- "None"
+
 #Converting to Columns to Factor/Character
 data$Puzzle <- as.factor(data$Puzzle)
 data$Win <- as.factor(data$Win)
@@ -299,8 +302,10 @@ ui <- fluidPage(
     downloadButton('downloadData', label = "Tangrams Data")),
     
       mainPanel(
+        uiOutput("message"),
         plotOutput("plot"),
         verbatimTextOutput("tests_out")
+       
       
       )
     
@@ -378,6 +383,11 @@ server <- function(input, output,session){
     #We must have data points
     if(nrow(plotData) > 0){
     
+    #There must be data for the color variable
+    colorcheck <- plotData %>% pull(input$color)
+    
+    if(all(is.na(colorcheck)) == FALSE){
+      
     
     #General Plot
     
@@ -420,9 +430,17 @@ server <- function(input, output,session){
     }
     
     return(myplot)
-    
+   
+      
+    #Error message because there is nothing to color by  
+    } else{
+      output$message <- renderUI({
+        HTML(paste(em("Please select a different Color Variable.")))
+      })
+      
     }
-  })
+  }
+})
   
   
   ##Statistical Tests
@@ -672,6 +690,24 @@ server <- function(input, output,session){
     
   }
 })
+  
+  
+#Removing Error Message for ggplot
+  observeEvent(input$color, {
+    
+    #Reactive Data
+    plotData <- plotDataR()
+    
+    #There must be data for the color variable
+    colorcheck <- plotData %>% pull(input$color)
+    
+    #If there is at least one thing to color by
+    if(all(is.na(colorcheck)) == FALSE){
+      output$message <- renderUI({""})
+    }
+  })
+  
+
   
   #Download Data
   output$downloadData <- downloadHandler(
