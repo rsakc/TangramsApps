@@ -29,6 +29,10 @@ data$Var2 <- as.factor(data$Var2)
 data$Var3 <- as.factor(data$Var3)
 data$PlayerID <- as.factor(data$PlayerID)
 
+#Lowercase
+data$PlayerID <- tolower(data$PlayerID)
+data$GroupID <- tolower(data$GroupID)
+
 #None to NA
 data["None"] <- NA
 
@@ -397,7 +401,7 @@ server <- function(input, output,session){
       geom_point(position=position_dodge(width = 0.75), size = 2) +
       labs(title = paste("Plot of",input$yvar, "by",input$xvar, "and Colored by", input$color)) +
       theme_bw() +
-      theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
+      theme(axis.text.x = element_text(size = 18, angle = 70, hjust = 1), 
             axis.title = element_text(size = 20), 
             plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
             legend.title = element_text(size = 18), 
@@ -412,7 +416,7 @@ server <- function(input, output,session){
         geom_point(position=position_dodge(width = 0.75), size = 2) +
         labs(title = paste("Plot of",input$yvar, "by",input$xvar, "and Colored by", input$color)) +
         theme_bw() +
-        theme(axis.text.x = element_text(size = 18, angle = 40, hjust = 1), 
+        theme(axis.text.x = element_text(size = 18, angle = 70, hjust = 1), 
               axis.title = element_text(size = 20), 
               plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
               legend.title = element_text(size = 18), 
