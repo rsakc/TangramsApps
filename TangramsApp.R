@@ -60,11 +60,32 @@ data["None"] <- NA
       data$Identifier[i] <- counter
     }
   }
+  
+  #Creating Order Column
+  data$Order <- NA
+  
+  counter <- 1
+  data$Order[1] <- 1
+  
+  for(i in 2:nrow(data)){
+    
+    if(data$Identifier[i] == data$Identifier[i - 1]){
+      counter <- counter + 1
 
+      data$Order[i] <- counter 
+    
+    } else{
+      counter <- 1
+      data$Order[i] <- counter
+    }
+  }
+  
+  
 
+####Paired Puzzle Data
 
-##Paired Puzzle Data
-dataP <- data
+#Only wins
+dataP <- data %>% filter(Win == "1")
 
  #Remove players with only one row of data
  #Removing players with only one type of puzzle
@@ -130,11 +151,31 @@ dataP <- data
 
   #Keeping only the rows that were not marked
     dataP <- dataP %>% filter(Index == 0)
-
- 
-
-##Paired Var Data
-    datavar <- data
+    
+    
+    #Creating Order Column for Puzzle Data
+    dataP$Order <- NA
+    
+    counter <- 1
+    dataP$Order[1] <- 1
+    
+    for(i in 2:nrow(dataP)){
+      
+      if(dataP$Identifier[i] == dataP$Identifier[i - 1]){
+        counter <- counter + 1
+        
+        dataP$Order[i] <- counter 
+        
+      } else{
+        counter <- 1
+        dataP$Order[i] <- counter
+      }
+    }
+    
+####Paired Var Data
+    
+    #Only wins
+    datavar <- data %>% filter(Win == "1")
     
     #Remove players with only one row of data
     #Keeping only players who played the same puzzle more than once
@@ -200,7 +241,24 @@ dataP <- data
      #Removing rows with Index2 == 1
      datavar <- datavar %>% filter(Index2 == 0)
    
+     #Creating Order Column for datavar before creating dataset for each var
+     datavar$Order <- NA
      
+     counter <- 1
+     datavar$Order[1] <- 1
+     
+     for(i in 2:nrow(datavar)){
+       
+       if(datavar$Identifier[i] == datavar$Identifier[i - 1]){
+         counter <- counter + 1
+         
+         datavar$Order[i] <- counter 
+         
+       } else{
+         counter <- 1
+         datavar$Order[i] <- counter
+       }
+     }
      
     #Keeping if there are exactly 2 levels
     #Separate checks for each of the three variables
@@ -233,9 +291,31 @@ dataP <- data
      datav2 <- datavar %>% filter(!(Identifier %in% Indexv2))
      datav3 <- datavar %>% filter(!(Identifier %in% Indexv3))
      
+    
   
 ## Win Data
     datawin <- data %>% filter(Win == "1")
+    
+    #Creating Order Column for Win Data
+    datawin$Order <- NA
+    
+    counter <- 1
+    datawin$Order[1] <- 1
+    
+    for(i in 2:nrow(datawin)){
+      
+      if(datawin$Identifier[i] == datawin$Identifier[i - 1]){
+        counter <- counter + 1
+        
+        datawin$Order[i] <- counter 
+        
+      } else{
+        counter <- 1
+        datawin$Order[i] <- counter
+      }
+    }
+    
+    
      
     
 #For UI Inputs
@@ -276,13 +356,13 @@ ui <- fluidPage(
      
       selectInput(inputId = "color",
                 label = "Color by:",
-                choices = c("Puzzle", "Var1", "Var2", "Var3", "RegTime", "DisplayTime", "HintOn", "NumHints", "HintTime"),
+                choices = c("Puzzle", "Var1", "Var2", "Var3", "RegTime", "DisplayTime", "HintOn", "NumHints", "HintTime", "Win"),
                 selected = "HintOn",
                 multiple = FALSE),
     
     selectInput(inputId = "facets",
                 label = "Facet by:",
-                choices = c("None", "Puzzle", "Var1", "Var2", "Var3", "RegTime", "DisplayTime", "HintOn", "NumHints"),
+                choices = c("None", "Puzzle", "Var1", "Var2", "Var3", "RegTime", "DisplayTime", "HintOn", "NumHints", "Win"),
                 selected = "None",
                 multiple = FALSE),
     
@@ -293,7 +373,8 @@ ui <- fluidPage(
     
     selectInput(inputId = "datatype",
                 label = "Data Type:",
-                choices = c("All Data", "Paired Data", "Win Data"),
+                choices = c("All Data", "Paired Puzzle Data", "Paired Var1 Data" ,
+                            "Paired Var2 Data", "Paired Var3 Data", "Win Data"),
                 selected = "All Data",
                 multiple = FALSE),
     
@@ -333,26 +414,23 @@ server <- function(input, output,session){
         dataR <- datawin
       
         
-    #Paired Data
-    } else if(input$datatype == "Paired Data"){
-     
-      if(input$xvar == "Puzzle"){
+    #Paired Puzzle Data
+    } else if(input$datatype == "Paired Puzzle Data"){
         dataR <- dataP
-    
-     } else if(input$xvar == "Var1"){
+      
+    #Paired Var 1 Data  
+    } else if(input$datatype == "Paired Var1 Data"){
         dataR <- datav1
       
-     } else if(input$xvar == "Var2"){
+    #Paired Var 2 Data
+    } else if(input$datatype == "Paired Var2 Data"){
         dataR <- datav2
-      
-     } else if(input$xvar == "Var3"){
-        dataR <- datav3
-     
-     } else if(input$xvar == "PlayerID"){
-       dataR <- data
-     }
-   }
     
+    #Paired Var 3 Data
+    } else if(input$datatype == "Paired Var3 Data"){
+        dataR <- datav3
+    }
+      
     dataR <- dataR %>% filter(GroupID %in% input$groupID, !(PlayerID %in% input$playerID))
     
     return(dataR)
@@ -505,7 +583,8 @@ server <- function(input, output,session){
     } else if(input$tests == "Paired T-Test"){
       
       #Data Type must be paired
-      if(input$datatype == "Paired Data"){
+      if(input$datatype %in% c("Paired Puzzle Data", "Paired Var1 Data", 
+                                "Paired Var2 Data", "Paired Var3 Data")){
         
         #Facet must be set to none
         if(input$facets == "None"){
@@ -552,7 +631,6 @@ server <- function(input, output,session){
       FacetVariable <- drop.levels(FacetVariable)
       FacetLevels <- nlevels(FacetVariable)
       
-      if(input$datatype != "Paired Data"){
       
 
       if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
@@ -621,12 +699,8 @@ server <- function(input, output,session){
         
         return(tidyanova)
       }
+      
         
-      #Error message since paired Data is selected  
-      } else{
-        "Either All Data or Win Data must be selected to run the ANOVA."
-    }
-    
       
     } else if(input$tests == "Block Design"){
       
@@ -636,7 +710,6 @@ server <- function(input, output,session){
       FacetLevels <- nlevels(FacetVariable)
       PlayerID <- plotData$PlayerID
       
-      if(input$datatype != "Paired Data"){
       
       if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
         
@@ -704,13 +777,12 @@ server <- function(input, output,session){
         
         return(tidyanova)
       }
-      
-      #Error message since paired Data is selected  
-      } else{
-        "Either All Data or Win Data must be selected to run the ANOVA."
-      }
+     
     }
     
+  #Error message (not enough observations)
+    } else{
+    "Not enough observations to run a statistical test."
   }
 })
   
