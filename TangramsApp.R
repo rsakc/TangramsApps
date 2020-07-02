@@ -546,7 +546,7 @@ server <- function(input, output,session){
     ColorVariable <- plotData %>% pull(input$color)
     ColorVariable <- drop.levels(ColorVariable)
     ColorLevels <- nlevels(ColorVariable)
-    
+     
     ##Two sample T test
     if(input$tests == "Two Sample T-Test"){
       
