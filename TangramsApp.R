@@ -17,6 +17,14 @@ data <- data %>% mutate(Date = str_sub(Date, 1, 10))
 #Changing NA to None for Vars
 data[is.na(data)] <- "None"
 
+#None to NA (For ANOVA)
+data["None"] <- "None"
+data$None <- as.factor(data$None)
+
+#Lowercase
+data$PlayerID <- tolower(data$PlayerID)
+data$GroupID <- tolower(data$GroupID)
+
 #Converting to Columns to Factor/Character
 data$Puzzle <- as.factor(data$Puzzle)
 data$Win <- as.factor(data$Win)
@@ -29,12 +37,7 @@ data$Var2 <- as.factor(data$Var2)
 data$Var3 <- as.factor(data$Var3)
 data$PlayerID <- as.factor(data$PlayerID)
 
-#Lowercase
-data$PlayerID <- tolower(data$PlayerID)
-data$GroupID <- tolower(data$GroupID)
 
-#None to NA
-data["None"] <- NA
 
 #Creating Identifier Column
 
@@ -631,8 +634,10 @@ server <- function(input, output,session){
       FacetVariable <- drop.levels(FacetVariable)
       FacetLevels <- nlevels(FacetVariable)
       
+      #We need enough observations
+      if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
       
-
+  
       if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
         
         anovatest <- aov(YVariable ~ XVariable + ColorVariable + FacetVariable + 
@@ -699,9 +704,14 @@ server <- function(input, output,session){
         
         return(tidyanova)
       }
+        
+      #Error Message when there aren't enough observations  
+      } else{
+        "Not enough observations to run the ANOVA."
+      }
       
         
-      
+    ##Block Design  
     } else if(input$tests == "Block Design"){
       
       #Pulling Facet Variable and PlayerID Variable
@@ -709,6 +719,9 @@ server <- function(input, output,session){
       FacetVariable <- drop.levels(FacetVariable)
       FacetLevels <- nlevels(FacetVariable)
       PlayerID <- plotData$PlayerID
+      
+      #We need enough observations
+      if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
       
       
       if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
@@ -777,13 +790,14 @@ server <- function(input, output,session){
         
         return(tidyanova)
       }
+        
+    #Error Message when there aren't enough observations  
+      } else{
+        "Not enough observations to run the Block Design."
+      }
      
     }
-    
-  #Error message (not enough observations)
-    } else{
-    "Not enough observations to run a statistical test."
-  }
+  } 
 })
   
   
@@ -802,7 +816,6 @@ server <- function(input, output,session){
     }
   })
   
-
   
   #Download Data
   output$downloadData <- downloadHandler(
