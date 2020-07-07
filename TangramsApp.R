@@ -825,7 +825,7 @@ server <- function(input, output,session){
     content = function(con) {
       write.csv(plotDataR(), con)
     })
-  
+   
   
 #Closes Server
 }
