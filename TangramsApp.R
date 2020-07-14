@@ -343,7 +343,7 @@ ui <- fluidPage(
                   choices =  all_groups,
                   multiple = TRUE,
                   selectize = TRUE,
-                  selected = c("donkey","Donkey")),
+                  selected = "donkey"),
       
       uiOutput(outputId = "player_out"),
               
@@ -389,7 +389,11 @@ ui <- fluidPage(
                 selected = "None",
                 multiple = FALSE),
     
-    downloadButton('downloadData', label = "Tangrams Data")),
+    downloadButton('downloadData', label = "Tangrams Data"),
+    
+    a(h5("Instructor Details"),
+      href="https://stat2labs.sites.grinnell.edu/tangrams.html", 
+      align="left", target = "_blank")),
     
       mainPanel(
         uiOutput("message"),
