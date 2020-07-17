@@ -1,4 +1,4 @@
-#Last Updated on July 15 2020
+#Last Updated on July 17 2020
 
 #Loading Libraries
 library(shiny)
@@ -392,7 +392,8 @@ ui <- fluidPage(
     
     selectInput(inputId = "tests",
                 label = "Statistical Tests:",
-                choices = c("None", "Two Sample T-Test", "Paired T-Test", "ANOVA", "Block Design"),
+                choices = c("None", "Two Sample T-Test", "Paired T-Test", "ANOVA", "Block Design",
+                            "Two Sample Randomization Test", "Paired Randomization Test"),
                 selected = "None",
                 multiple = FALSE),
     
@@ -403,10 +404,16 @@ ui <- fluidPage(
       align="left", target = "_blank")),
     
       mainPanel(
-        uiOutput("message"),
-        plotOutput("plot"),
-        verbatimTextOutput("tests_out")
-       
+        tabsetPanel(
+          tabPanel("General",
+                   uiOutput("message"),
+                   plotOutput("plot"),
+                   verbatimTextOutput("tests_out")),
+          
+          tabPanel("Residuals", uiOutput("residualtext"),
+                   fluidRow(
+                     splitLayout(cellWidths = c("50%", "50%"), 
+                                 plotOutput("rplot1"), plotOutput("rplot2")))))
       
       )
     
@@ -808,12 +815,812 @@ server <- function(input, output,session){
       } else{
         "Not enough observations to run the Block Design."
       }
-     
+    
+      
+    ##Two Sample Randomization Test 
+    } else if(input$tests == "Two Sample Randomization Test"){
+  
+      #Facet must be set to none
+      if(input$facets == "None"){
+        
+        #X Variable and color variable must be the same
+        if(input$xvar == input$color){
+          
+          #X Variable must have exactly two levels
+          if(XLevels == 2){
+            
+            #Each group needs more than 1 observation
+            check <- plotData %>% group_by_at(input$xvar) %>%
+              summarize(Count = n())
+            
+            if(!(1 %in% check$Count)){
+              
+              #Small Data Frame
+              data <- data.frame(XVariable, YVariable)
+               
+              #Identifying the Two Groups and creating necessary vectors
+              groups <- sort(unique(data$XVariable))
+              group1 <- groups[1]
+              group2 <- groups[2]
+              
+              data1 <- data %>% filter(XVariable == group1)
+              data2 <- data %>% filter(XVariable == group2)
+              
+              group1vec <- data1$YVariable
+              group2vec <- data2$YVariable
+              
+              
+              #Running the Two Sample Randomization Test
+              
+              #Setting up
+              meandiff <- mean(group1vec) - mean(group2vec)
+              R <- 100000
+              results <- numeric()
+              
+              for(i in 1:R){
+                samp <- sample(data$YVariable, size = length(data$YVariable), replace = FALSE)
+                
+                samp1 <- samp[1:length(group1vec)]
+                samp2 <- samp[(length(group1vec) + 1):length(samp)]
+                
+                results[i] <- mean(samp1) - mean(samp2)
+              }
+              
+              pvalue <- (1 + sum(results >= abs(meandiff)) + sum(results <= -abs(meandiff))) / (R+1)
+              
+              return(paste("P Value:", round(pvalue,5)))
+              
+            } else {
+              "Not enough observations to run the Two Sample Randomization Test."
+            }
+            
+          } else{
+            "Two Sample Randomization Tests are only valid when there are exactly 2 groups."
+          }
+          
+        } else{
+          "The X Variable and the Color Variable must be the same."
+        }
+        
+      } else{
+        "Facet option must be set to None to run the Two Sample Randomization Test."
+      }
+    
+    
+    ## Paired Randomization Test
+    } else if(input$tests == "Paired Randomization Test"){
+      
+      #Data Type must be paired
+      if(input$datatype %in% c("Paired Puzzle Data", "Paired Var1 Data", 
+                               "Paired Var2 Data", "Paired Var3 Data")){
+        
+        #Facet must be set to none
+        if(input$facets == "None"){
+          
+          #X Variable and color variable must be the same
+          if(input$xvar == input$color){
+            
+            #X Variable must have exactly two levels
+            if(XLevels == 2){
+              
+              #Each group needs more than 1 observation
+              check <- plotData %>% group_by_at(input$xvar) %>%
+                summarize(Count = n())
+              
+              if(!(1 %in% check$Count)){
+                
+                #Small Data Frame
+                data <- data.frame(XVariable, YVariable)
+                
+                #Identifying the Two Groups and creating necessary vectors
+                groups <- sort(unique(data$XVariable))
+                group1 <- groups[1]
+                group2 <- groups[2]
+                
+                data1 <- data %>% filter(XVariable == group1)
+                data2 <- data %>% filter(XVariable == group2)
+                
+                group1vec <- data1$YVariable
+                group2vec <- data2$YVariable
+                
+                
+                #Running the Paired Randomization Test
+                
+                #Differences Vector
+                diffvec <- group1vec - group2vec
+                
+                #Setting up
+                meandiff <- mean(diffvec)
+                R <- 100000
+                results <- numeric()
+                
+                for(i in 1:R){
+                  sign <- sample(c(-1,1), size = length(diffvec), replace = T)
+                  resamp <- sign * diffvec
+                  
+                  results[i] <- mean(resamp)
+                  
+                }
+                
+                pvalue <- (1 + sum(results >= abs(meandiff)) + sum(results <= -abs(meandiff))) / (R+1)
+                
+                return(paste("P Value:", round(pvalue,4)))
+                
+                
+              } else {
+                "Not enough observations to run the Paired Randomization Test."
+              } 
+              
+            } else{
+              "Paired Randomization Tests are only valid when there are exactly 2 groups."
+            }
+            
+          } else{
+            "The X Variable and the Color Variable must be the same."
+          }
+          
+        } else{
+          "Facet option must be set to None to run the Paired Randomization Test."
+        }
+        
+      } else{
+        "Paired Data must be selected to run the Paired Randomization Test."
+      }
+    
     }
-  } 
+   } 
 })
   
   
+  #Residual Histogram (RPLOT 1)
+  output$rplot1 <- renderPlot({
+    
+    #Using reactive data
+    plotData <- plotDataR()
+    
+    #Test is Not None
+    if(input$tests != "None"){
+      
+      #Pulling 
+      XVariable <- plotData %>% pull(input$xvar)
+      XVariable <- drop.levels(XVariable)
+      XLevels <- nlevels(XVariable)
+      YVariable <- plotData %>% pull(input$yvar)
+      ColorVariable <- plotData %>% pull(input$color)
+      ColorVariable <- drop.levels(ColorVariable)
+      ColorLevels <- nlevels(ColorVariable)
+      
+    ##Two sample t-test/Two Sample Randomization test
+      if(input$tests %in% c("Two Sample T-Test", "Two Sample Randomization Test")){
+  
+        #Facet must be set to none
+        if(input$facets == "None"){
+          
+          #X Variable and color variable must be the same
+          if(input$xvar == input$color){
+            
+            #X Variable must have exactly two levels
+            if(XLevels == 2){
+              
+              #Each group needs more than 1 observation
+              check <- plotData %>% group_by_at(input$xvar) %>%
+                summarize(Count = n())
+              
+              if(!(1 %in% check$Count)){
+                
+                #Small Data Frame
+                data <- data.frame(XVariable, YVariable)
+                
+                #Identifying the Two Groups and creating necessary vectors
+                groups <- sort(unique(data$XVariable))
+                group1 <- groups[1]
+                group2 <- groups[2]
+                
+                data1 <- data %>% filter(XVariable == group1)
+                data2 <- data %>% filter(XVariable == group2)
+                
+                group1vec <- data1$YVariable
+                group2vec <- data2$YVariable
+                
+                #Calculate Residuals
+                group1res <- group1vec - mean(group1vec)
+                group2res <- group2vec - mean(group2vec)
+                
+                #Combining residuals into one vector
+                residuals <- c(group1res, group2res)
+                
+                #Remove Message
+                output$residualtext <- renderUI({""})
+                
+                #Creating plot
+                plot <- hist(residuals, main = "Histogram of Residuals",
+                             xlab = "Residuals",
+                             ylab = "Count")
+                
+                return(plot)
+                
+                
+              } else {
+                output$residualtext <- renderUI(HTML(paste(
+                  em("A valid statistical test must be in place for the residual plots to be generated."))))
+              }
+              
+            } else{
+              output$residualtext <- renderUI(HTML(paste(
+                em("A valid statistical test must be in place for the residual plots to be generated."))))
+            }
+            
+          } else{
+            output$residualtext <- renderUI(HTML(paste(
+              em("A valid statistical test must be in place for the residual plots to be generated."))))
+          }
+          
+        } else{
+          output$residualtext <- renderUI(HTML(paste(
+            em("A valid statistical test must be in place for the residual plots to be generated."))))
+        }
+  
+        
+      ##Paired T-Test/Paired Randomization Test
+      } else if(input$tests %in% c("Paired T-Test", "Paired Randomization Test")){
+          
+        #Data Type must be paired
+        if(input$datatype %in% c("Paired Puzzle Data", "Paired Var1 Data", 
+                                 "Paired Var2 Data", "Paired Var3 Data")){
+          
+          #Facet must be set to none
+          if(input$facets == "None"){
+            
+            #X Variable and color variable must be the same
+            if(input$xvar == input$color){
+              
+              #X Variable must have exactly two levels
+              if(XLevels == 2){
+                
+                #Each group needs more than 1 observation
+                check <- plotData %>% group_by_at(input$xvar) %>%
+                  summarize(Count = n())
+                
+                if(!(1 %in% check$Count)){
+                  
+                  #Small Data Frame
+                  data <- data.frame(XVariable, YVariable)
+                  
+                  #Identifying the Two Groups and creating necessary vectors
+                  groups <- sort(unique(data$XVariable))
+                  group1 <- groups[1]
+                  group2 <- groups[2]
+                  
+                  data1 <- data %>% filter(XVariable == group1)
+                  data2 <- data %>% filter(XVariable == group2)
+                  
+                  group1vec <- data1$YVariable
+                  group2vec <- data2$YVariable
+                  
+                  #Differences Vector
+                  diffvec <- group1vec - group2vec
+                  
+                  #Calculating residuals
+                  residuals <- diffvec - mean(diffvec)
+                  
+                  #Remove Message
+                  output$residualtext <- renderUI({""})
+                  
+                  #Creating plot
+                  plot <- hist(residuals, main = "Histogram of Residuals",
+                               xlab = "Residuals",
+                               ylab = "Count")
+                  
+                  return(plot)
+                  
+                } else {
+                  output$residualtext <- renderUI(HTML(paste(
+                    em("A valid statistical test must be in place for the residual plots to be generated."))))
+                } 
+                
+              } else{
+                output$residualtext <- renderUI(HTML(paste(
+                  em("A valid statistical test must be in place for the residual plots to be generated."))))
+              }
+              
+            } else{
+              output$residualtext <- renderUI(HTML(paste(
+                em("A valid statistical test must be in place for the residual plots to be generated."))))
+            }
+            
+          } else{
+            output$residualtext <- renderUI(HTML(paste(
+              em("A valid statistical test must be in place for the residual plots to be generated."))))
+          }
+          
+        } else{
+          output$residualtext <- renderUI(HTML(paste(
+            em("A valid statistical test must be in place for the residual plots to be generated."))))
+        }
+      
+        
+      ##ANOVA
+      } else if(input$tests == "ANOVA") {
+        
+        #Pulling Facet Variable
+        FacetVariable <- plotData %>% pull(input$facets)
+        FacetVariable <- drop.levels(FacetVariable)
+        FacetLevels <- nlevels(FacetVariable)
+        
+        #We need enough observations
+        if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
+          
+          
+          if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            anovatest <- aov(YVariable ~ XVariable + ColorVariable + FacetVariable + 
+                               XVariable*ColorVariable + 
+                               XVariable*FacetVariable +
+                               ColorVariable*FacetVariable)
+            
+          } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+            
+            
+            anovatest <-  aov(YVariable ~ XVariable + ColorVariable +
+                                XVariable*ColorVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+            
+            
+            anovatest <-  aov(YVariable ~ XVariable + FacetVariable +
+                                XVariable*FacetVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ XVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            
+            anovatest <-  aov(YVariable ~ ColorVariable + FacetVariable +
+                                ColorVariable*FacetVariable)
+            
+            
+          } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ ColorVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+            
+            anovatest <-  aov(YVariable ~ FacetVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+            
+            #No model created
+            
+          }
+          
+          #Returning Error message
+          if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+            
+            output$residualtext <- renderUI(HTML(paste(
+              em("A valid statistical test must be in place for the residual plots to be generated."))))
+           
+          #ANOVA Test was run 
+          } else{
+            
+            #Remove Message
+            output$residualtext <- renderUI({""})
+            
+            #Creating plot
+            plot <- hist(anovatest$residuals, main = "Histogram of Residuals",
+                         xlab = "Residuals",
+                         ylab = "Count")
+            
+            return(plot)
+        
+          }
+          
+          #Error Message when there aren't enough observations  
+        } else{
+          output$residualtext <- renderUI(HTML(paste(
+            em("A valid statistical test must be in place for the residual plots to be generated."))))
+        }
+        
+     
+      ##Block Design
+      } else if(input$tests == "Block Design"){
+        
+        #Pulling Facet Variable and PlayerID Variable
+        FacetVariable <- plotData %>% pull(input$facets)
+        FacetVariable <- drop.levels(FacetVariable)
+        FacetLevels <- nlevels(FacetVariable)
+        PlayerID <- plotData$PlayerID
+        
+        #We need enough observations
+        if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
+          
+          
+          if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            anovatest <- aov(YVariable ~ PlayerID + XVariable + ColorVariable + FacetVariable + 
+                               XVariable*ColorVariable + 
+                               XVariable*FacetVariable +
+                               ColorVariable*FacetVariable)
+            
+          } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable + ColorVariable +
+                                XVariable*ColorVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable + FacetVariable +
+                                XVariable*FacetVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + ColorVariable + FacetVariable +
+                                ColorVariable*FacetVariable)
+            
+            
+          } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + ColorVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + FacetVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+            
+           #No model created
+            
+          }
+          
+          #Returning Error message
+          if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+            
+            output$residualtext <- renderUI(HTML(paste(
+              em("A valid statistical test must be in place for the residual plots to be generated."))))
+            
+          #Block Design was created
+          } else{
+            
+            #Remove Message
+            output$residualtext <- renderUI({""})
+            
+            #Creating plot
+            plot <- hist(anovatest$residuals, main = "Histogram of Residuals",
+                         xlab = "Residuals",
+                         ylab = "Count")
+            
+            return(plot)
+            
+            
+          }
+          
+          #Error Message when there aren't enough observations  
+        } else{
+          output$residualtext <- renderUI(HTML(paste(
+            em("A valid statistical test must be in place for the residual plots to be generated."))))
+        }
+      }
+      
+      #Test option is none
+    } else{
+      output$residualtext <- renderUI(HTML(paste(
+        em("A valid statistical test must be in place for the residual plots to be generated."))))
+    }
+  })
+  
+  
+  
+  #Normal QQ Plot (RPLOT 2)
+  output$rplot2 <- renderPlot({
+      
+    #Using reactive data
+    plotData <- plotDataR()
+    
+    #Test is Not None
+    if(input$tests != "None"){
+      
+      #Pulling 
+      XVariable <- plotData %>% pull(input$xvar)
+      XVariable <- drop.levels(XVariable)
+      XLevels <- nlevels(XVariable)
+      YVariable <- plotData %>% pull(input$yvar)
+      ColorVariable <- plotData %>% pull(input$color)
+      ColorVariable <- drop.levels(ColorVariable)
+      ColorLevels <- nlevels(ColorVariable)
+      
+      ##Two sample t-test/Two Sample Randomization test
+      if(input$tests %in% c("Two Sample T-Test", "Two Sample Randomization Test")){
+        
+        #Facet must be set to none
+        if(input$facets == "None"){
+          
+          #X Variable and color variable must be the same
+          if(input$xvar == input$color){
+            
+            #X Variable must have exactly two levels
+            if(XLevels == 2){
+              
+              #Each group needs more than 1 observation
+              check <- plotData %>% group_by_at(input$xvar) %>%
+                summarize(Count = n())
+              
+              if(!(1 %in% check$Count)){
+                
+                #Small Data Frame
+                data <- data.frame(XVariable, YVariable)
+                
+                #Identifying the Two Groups and creating necessary vectors
+                groups <- sort(unique(data$XVariable))
+                group1 <- groups[1]
+                group2 <- groups[2]
+                
+                data1 <- data %>% filter(XVariable == group1)
+                data2 <- data %>% filter(XVariable == group2)
+                
+                group1vec <- data1$YVariable
+                group2vec <- data2$YVariable
+                
+                #Calculate Residuals
+                group1res <- group1vec - mean(group1vec)
+                group2res <- group2vec - mean(group2vec)
+                
+                #Combining residuals into one vector
+                residuals <- c(group1res, group2res)
+                
+                #Creating plot
+                plot <- qqnorm(residuals) 
+                plot <- qqline(residuals)
+                
+                return(plot)
+                
+              } 
+            } 
+          } 
+        } 
+        
+        
+        ##Paired T-Test/Paired Randomization Test
+      } else if(input$tests %in% c("Paired T-Test", "Paired Randomization Test")){
+        
+        #Data Type must be paired
+        if(input$datatype %in% c("Paired Puzzle Data", "Paired Var1 Data", 
+                                 "Paired Var2 Data", "Paired Var3 Data")){
+          
+          #Facet must be set to none
+          if(input$facets == "None"){
+            
+            #X Variable and color variable must be the same
+            if(input$xvar == input$color){
+              
+              #X Variable must have exactly two levels
+              if(XLevels == 2){
+                
+                #Each group needs more than 1 observation
+                check <- plotData %>% group_by_at(input$xvar) %>%
+                  summarize(Count = n())
+                
+                if(!(1 %in% check$Count)){
+                  
+                  #Small Data Frame
+                  data <- data.frame(XVariable, YVariable)
+                  
+                  #Identifying the Two Groups and creating necessary vectors
+                  groups <- sort(unique(data$XVariable))
+                  group1 <- groups[1]
+                  group2 <- groups[2]
+                  
+                  data1 <- data %>% filter(XVariable == group1)
+                  data2 <- data %>% filter(XVariable == group2)
+                  
+                  group1vec <- data1$YVariable
+                  group2vec <- data2$YVariable
+                  
+                  #Differences Vector
+                  diffvec <- group1vec - group2vec
+                  
+                  #Calculating residuals
+                  residuals <- diffvec - mean(diffvec)
+                  
+                  #Creating plot
+                  plot <- qqnorm(residuals) 
+                  plot <- qqline(residuals)
+                  
+                  return(plot)
+                  
+                } 
+              } 
+            } 
+          }
+        } 
+        
+        
+        ##ANOVA
+      } else if(input$tests == "ANOVA") {
+        
+        #Pulling Facet Variable
+        FacetVariable <- plotData %>% pull(input$facets)
+        FacetVariable <- drop.levels(FacetVariable)
+        FacetLevels <- nlevels(FacetVariable)
+        
+        #We need enough observations
+        if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
+          
+          
+          if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            anovatest <- aov(YVariable ~ XVariable + ColorVariable + FacetVariable + 
+                               XVariable*ColorVariable + 
+                               XVariable*FacetVariable +
+                               ColorVariable*FacetVariable)
+            
+          } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+            
+            
+            anovatest <-  aov(YVariable ~ XVariable + ColorVariable +
+                                XVariable*ColorVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+            
+            
+            anovatest <-  aov(YVariable ~ XVariable + FacetVariable +
+                                XVariable*FacetVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ XVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            
+            anovatest <-  aov(YVariable ~ ColorVariable + FacetVariable +
+                                ColorVariable*FacetVariable)
+            
+            
+          } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ ColorVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+            
+            anovatest <-  aov(YVariable ~ FacetVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+            
+            #No model created
+            
+          }
+          
+          #Returning Error message
+          if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+            #No model created
+            
+            
+            #ANOVA Test was run 
+          } else{
+            
+            #Creating plot
+            plot <- qqnorm(anovatest$residuals) 
+            plot <- qqline(anovatest$residuals)
+            
+            return(plot)
+            
+          }
+        } 
+        
+        
+        ##Block Design
+      } else if(input$tests == "Block Design"){
+        
+        #Pulling Facet Variable and PlayerID Variable
+        FacetVariable <- plotData %>% pull(input$facets)
+        FacetVariable <- drop.levels(FacetVariable)
+        FacetLevels <- nlevels(FacetVariable)
+        PlayerID <- plotData$PlayerID
+        
+        #We need enough observations
+        if(nrow(plotData) >= XLevels*ColorLevels*FacetLevels + 1){
+          
+          
+          if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            anovatest <- aov(YVariable ~ PlayerID + XVariable + ColorVariable + FacetVariable + 
+                               XVariable*ColorVariable + 
+                               XVariable*FacetVariable +
+                               ColorVariable*FacetVariable)
+            
+          } else if(XLevels > 1 &  ColorLevels  > 1 & FacetLevels < 2){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable + ColorVariable +
+                                XVariable*ColorVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels  < 2 & FacetLevels > 1 ){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable + FacetVariable +
+                                XVariable*FacetVariable)
+            
+            
+            
+          } else if(XLevels > 1 &  ColorLevels < 2 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + XVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  > 1 & FacetLevels > 1){
+            
+            
+            anovatest <-  aov(YVariable ~ PlayerID + ColorVariable + FacetVariable +
+                                ColorVariable*FacetVariable)
+            
+            
+          } else if(XLevels < 2 &  ColorLevels > 1 & FacetLevels < 2){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + ColorVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels > 1){
+            
+            anovatest <-  aov(YVariable ~ PlayerID + FacetVariable)
+            
+          } else if(XLevels < 2 &  ColorLevels  < 2 & FacetLevels < 2){
+            
+            #No model created
+            
+          }
+          
+          #Returning Error message
+          if(XLevels < 2 & ColorLevels < 2 & FacetLevels < 2){
+            #No model created
+            
+            
+            #Block Design was created
+          } else{
+            
+            #Creating plot
+            plot <- qqnorm(anovatest$residuals) 
+            plot <- qqline(anovatest$residuals)
+            
+            return(plot)
+            
+          }
+        } 
+      }
+      
+      
+    } 
+  })
+      
+      
+      
+        
+        
+        
+        
+        
+        
+        
+      
 #Removing Error Message for ggplot
   observeEvent(input$color, {
     
