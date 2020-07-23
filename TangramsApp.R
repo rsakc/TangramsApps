@@ -1,4 +1,4 @@
-#Last Updated on July 17 2020
+#Last Updated on July 23 2020
 
 #Loading Libraries
 library(shiny)
@@ -91,8 +91,7 @@ data$PlayerID <- as.factor(data$PlayerID)
       data$Order[i] <- counter
     }
   }
-  
-  
+
 
 ####Paired Puzzle Data
 
@@ -332,7 +331,6 @@ dataP <- data %>% filter(Win == "1")
     
 #For UI Inputs
 all_groups <- sort(unique(data$GroupID))
-#all_players <- sort(unique(data$PlayerID))
 
 
 ##UI
@@ -415,10 +413,7 @@ ui <- fluidPage(
                      splitLayout(cellWidths = c("50%", "50%"), 
                                  plotOutput("rplot1"), plotOutput("rplot2")))))
       
-      )
-    
-    )
-  )
+      )))
 
 
 ##Server
@@ -473,7 +468,6 @@ server <- function(input, output,session){
                 selectize = TRUE)
     
   })
-  
   
   
   ##Visualization
@@ -534,6 +528,8 @@ server <- function(input, output,session){
         theme(strip.text = element_text(size = 16)) 
     }
     
+      
+    #Returning visual
     return(myplot)
    
       
@@ -1306,8 +1302,6 @@ server <- function(input, output,session){
                          ylab = "Count")
             
             return(plot)
-            
-            
           }
           
           #Error Message when there aren't enough observations  
@@ -1606,20 +1600,8 @@ server <- function(input, output,session){
           }
         } 
       }
-      
-      
     } 
   })
-      
-      
-      
-        
-        
-        
-        
-        
-        
-        
       
 #Removing Error Message for ggplot
   observeEvent(input$color, {
@@ -1649,7 +1631,6 @@ server <- function(input, output,session){
   
 #Closes Server
 }
-
 
 #Running Shiny App
 shinyApp(ui = ui, server = server)
